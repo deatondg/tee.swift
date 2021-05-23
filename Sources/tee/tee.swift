@@ -5,6 +5,7 @@ import Foundation
  Following the precedent of `standardInput`/`standardOutput`/`standardError` in `Process` from `Foundation`,
     we accept the type `Any`, but throw a precondition failure if the arguments are not of type `Pipe` or `FileHandle`.
  https://github.com/apple/swift-corelibs-foundation/blob/eec4b26deee34edb7664ddd9c1222492a399d122/Sources/Foundation/Process.swift
+ When `input` sends an EOF (write of length 0), the `outputs` file handles are closed, so only output to handles you own.
  This function sets the `readabilityHandler` of inputs and the `writabilityHandler` of outputs,
     so you should not set these yourself after calling `tee`.
  The one exception to this guidance is that you can set the `readabilityHandler` of `input` to `nil` to stop `tee`ing.
