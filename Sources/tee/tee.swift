@@ -3,7 +3,7 @@ import Foundation
 /**
  Duplicates the data from `input` into each of the `outputs`.
  Following the precedent of `standardInput`/`standardOutput`/`standardError` in `Process` from `Foundation`,
-    we accept the type `Any`, but throw a precondition failure if the arguments are not `Pipe` or `FileHandle`.
+    we accept the type `Any`, but throw a precondition failure if the arguments are not of type `Pipe` or `FileHandle`.
  https://github.com/apple/swift-corelibs-foundation/blob/eec4b26deee34edb7664ddd9c1222492a399d122/Sources/Foundation/Process.swift
  This function sets the `readabilityHandler` of inputs and the `writabilityHandler` of outputs,
     so you should not set these yourself after calling `tee`.
@@ -16,6 +16,9 @@ import Foundation
  If this is unacceptable for your use case. you may wish to rewrite this with a data deque for each output.
  */
 public func tee(from input: Any, into outputs: Any...) {
+    tee(from: input, into: outputs)
+}
+public func tee(from input: Any, into outputs: [Any]) {
     /// Get reading and writing handles from the input and outputs respectively.
     guard let input = fileHandleForReading(input) else {
         preconditionFailure(incorrectTypeMessage)
@@ -34,6 +37,10 @@ public func tee(from input: Any, into outputs: Any...) {
         
         /// If the data is empty, EOF reached
         guard !data.isEmpty else {
+            /// Close all the outputs
+            for output in outputs {
+                output.closeFile()
+            }
             /// Stop reading and return
             input.readabilityHandler = nil
             return
