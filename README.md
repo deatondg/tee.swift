@@ -1,10 +1,10 @@
 # tee.swift
 
-`tee`-like functionality for Pipe and FileHandle in Swift. Connect one pipe to many!
+`tee`-like functionality for `Pipe` and `FileHandle` in Swift. Connect one pipe to many!
 
 # Usage
 
-This library exports a single function (well, two) which reads data from an input `Pipe` or `FileHandle` and writes it to multiple output `Pipe`s or `FileHandle`s. When used with `Process`, this enables sending the output of one process to many, or capturing the output of a process and sending it to the standard output simultaneously. 
+This library exports a single function (well, two) which reads data from an input `Pipe` or `FileHandle` and writes it to multiple output `Pipe`s or `FileHandle`s. When used with `Process`, this enables sending the output of one process to many or capturing the output of a process and sending it to the standard output simultaneously. 
 ```swift
 public func tee(from input: Any, into outputs: Any...)
 public func tee(from input: Any, into outputs: [Any])
