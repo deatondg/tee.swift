@@ -149,7 +149,9 @@ This implementation waits for all outputs to consume a piece of input before mor
 This means that the speed at which your processes read data may be bottlenecked by the speed at which the slowest process reads data, but this method also comes with very little memory overhead and is easy to cancel.
 If this is unacceptable for your use case, you may wish to rewrite this with a data deque for each output.
 
- ```swift
+<br/>
+
+```swift
 public protocol TeeReadable {
     var fileHandleForReading: FileHandle { get }
     var teeShouldCloseForReadingOnEOF: Bool { get }
@@ -160,8 +162,9 @@ The `fileHandleForReading` of inputs is used to gather data which is then wrrite
 If `teeShouldCloseForReadingOnEOF` is `true`, the `fileHandleForReading` will be closed once the it sends an EOF.
 These getters are called once at the beginning of `tee` and never read from again.
 
+<br/>
 
- ```swift
+```swift
 public protocol TeeWriteable {
     var fileHandleForWriting: FileHandle { get }
     var teeShouldCloseForWritingOnEOF: Bool { get }
@@ -172,12 +175,14 @@ The `fileHandleForReading` of inputs is used to gather data which is then wrrite
 If `teeShouldCloseForWritingOnEOF` is `true`, the `fileHandleForWriting` will be closed once the it sends an EOF.
 These getters are called once at the beginning of `tee` and never read from again.
 
+<br/>
 
 ```swift
 public typealias Teeable = TeeReadable & TeeWriteable
 ```
 A simple typealias for a type which can be any argument to `tee`
 
+<br/>
 
 ```swift
 extension FileHandle: Teeable
@@ -186,6 +191,7 @@ extension FileHandle: Teeable
 By default, `tee` will _not_ close `FileHandle`s on EOF, so you must override this property if you would like different behavior.
 This is so that it is easy to work with `FileHandle.standardInput`/`.standardOutput`/`.standardError`, which should not be closed.
 
+<br/>
 
 ```swift
 extension Pipe: Teeable
@@ -195,6 +201,7 @@ By default, `tee` will close `Pipe`s on EOF for writing but _not_ for reading, s
 This is so that it is easy to integrate `tee` into existing workflows involving `Process`.
 As far as I know, there is no way to create a `Pipe` which does not own its reading handle, so you should not overwrite `teeShouldCloseForReadingOnEOF`.
 
+<br/>
 
 ```swift
 extension TeeReadable {
@@ -204,16 +211,18 @@ extension TeeReadable {
 A convience method on `TeeReadable` to change `teeShouldCloseForReadingOnEOF`.
 Calling `t.teeCloseForReadingOnEOF(a)` for some `t: TeeReadable` and `a: Bool` returns a `TeeReadable` with a handle which is that of `t` and a `teeShouldCloseForReadingOnEOF` which is `a`.
 
+<br/>
 
 ```swift
 extension TeeWriteable {
     public func teeCloseForWritingOnEOF(_ shouldCloseForWritingOnEOF: Bool = true) -> TeeCloseForWritingOnEOF<Self> 
 }
 ```
-
-
 A convience method on `TeeWriteable` to change `teeShouldCloseForWritingOnEOF`.
 Calling `t.teeCloseForWritingOnEOF(a)` for some `t: TeeWriteable` and `a: Bool` returns a `TeeWriteable` with a handle which is that of `t` and a `teeShouldCloseForWritingOnEOF` which is `a`.
+
+<br/>
+
 ```swift
 extension TeeReadable where Self: TeeWriteable {
     public func teeCloseOnEOF(forReading shouldCloseForReadingOnEOF: Bool = false, forWriting shouldCloseForWritingOnEOF: Bool = true) -> TeeCloseOnEOF<Self>
