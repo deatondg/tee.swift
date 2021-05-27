@@ -4,18 +4,12 @@
 
 # Usage
 
-This library exports a single function (well, two) which reads data from an input `Pipe` or `FileHandle` and writes it to multiple output `Pipe`s or `FileHandle`s. When used with `Process`, this enables sending the output of one process to many or capturing the output of a process and sending it to the standard output simultaneously. 
+This library exports a single function (well, two) which reads data from an input `TeeReadable` (think  a `Pipe` or `FileHandle`) and writes it to multiple output `TeeWriteable`s. 
+When used with `Process`, this enables sending the output of one process to many or capturing the output of a process and sending it to the standard output simultaneously. 
 ```swift
-public func tee(from input: Any, into outputs: Any...)
-public func tee(from input: Any, into outputs: [Any])
+public func tee(from input: TeeReadable, into outputs: TeeWriteable...)
+public func tee(from input: TeeReadable, into outputs: [TeeWriteable])
 ```
-Following the precedent of `standardInput`/`standardOutput`/`standardError` in [`Process` from `Foundation`](https://github.com/apple/swift-corelibs-foundation/blob/eec4b26deee34edb7664ddd9c1222492a399d122/Sources/Foundation/Process.swift), this function accepts the type `Any`, but throws a precondition failure if the arguments are not of type `Pipe` or `FileHandle`.
-
-When `input` sends an EOF (write of length 0), the `outputs` file handles are closed, so only output to handles you own.
-
-This function sets the `readabilityHandler` of inputs and the `writabilityHandler` of outputs, so you should not set these yourself after calling `tee`. The one exception to this guidance is that you can set the `readabilityHandler` of `input` to `nil` to stop `tee`ing. After doing so, the `writeabilityHandler`s of the `output`s will be set to `nil` automatically after all in-progress writes complete, but if desired, you could set them to `nil` manually to cancel these writes. However, this may result in some outputs recieving less of the data than others.
-
-This implementation waits for all outputs to consume a piece of input before more input is read. This means that the speed at which your processes read data may be bottlenecked by the speed at which the slowest process reads data, but this method also comes with very little memory overhead and is easy to cancel. If this is unacceptable for your use case. you may wish to rewrite this with a data deque for each output.
 
 To import this function, add this library as a SwiftPM dependency.
 ```swift
@@ -30,7 +24,7 @@ let package = Package(
             targets: ["ExampleTarget"]),
     ],
     dependencies: [
-        .package(name: "tee", url: "https://github.com/deatondg/tee.swift", from: "1.0.0"),
+        .package(name: "tee", url: "https://github.com/deatondg/tee.swift", from: "2.0.0"),
     ],
     targets: [
         .target(
@@ -137,3 +131,86 @@ inputHandle.closeFile()
 assert(String(data: catOutput1.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) == message)
 assert(String(data: catOutput2.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) == message)
 ```
+
+# Documentation
+
+```swift
+public func tee(from input: TeeReadable, into outputs: TeeWriteable...)
+public func tee(from input: TeeReadable, into outputs: [TeeWriteable])
+```
+`tee` duplicates the data from `input` into each of the `outputs`.
+Generally, the arguments to `tee` should be `Pipe`s or `FileHandles` like the `standardInput`/`standardOutput`/`standardError` in `Process` from `Foundation`,
+The `fileHandleForReading` of `input` is used to gather data which is then wrriten to the `fileHandleForWriting` of the `outputs`.
+When the input sends an EOF (observed as a length 0 read), the handles of `input` and `outputs` are closed if their `teeShouldCloseForReadingOnEOF` or `shouldCloseForWritingOnEOF`properties respectively are `true`.
+`tee` sets the `readabilityHandler` of inputs and the `writeabilityHandler` of outputs, so you should not set these yourself after calling `tee`.
+The one exception to this guidance is that you can set the `readabilityHandler` of the input's handle to `nil` to stop `tee`ing.
+After doing so, the `writeabilityHandler`s of the outputs will be set to `nil` automatically after all in-progress writes complete, but if desired, you could set them to `nil` manually to cancel these writes although this may result in some outputs recieving less of the data than others.
+This implementation waits for all outputs to consume a piece of input before more input is read.
+This means that the speed at which your processes read data may be bottlenecked by the speed at which the slowest process reads data, but this method also comes with very little memory overhead and is easy to cancel.
+If this is unacceptable for your use case. you may wish to rewrite this with a data deque for each output.
+
+ ```swift
+public protocol TeeReadable {
+    var fileHandleForReading: FileHandle { get }
+    var teeShouldCloseForReadingOnEOF: Bool { get }
+}
+```
+This protocol describes a possible `input` argument of the `tee` function.
+The `fileHandleForReading` of inputs is used to gather data which is then wrriten to the `fileHandleForWriting` of the outputs.
+If `teeShouldCloseForReadingOnEOF` is `true`, the `fileHandleForReading` will be closed once the it sends an EOF.
+These getters are called once at the beginning of `tee` and never read from again.
+
+ ```swift
+public protocol TeeWriteable {
+    var fileHandleForWriting: FileHandle { get }
+    var teeShouldCloseForWritingOnEOF: Bool { get }
+}
+```
+This protocol describes the `outputs` arguments of the `tee` function.
+The `fileHandleForReading` of inputs is used to gather data which is then wrriten to the `fileHandleForWriting` of the outputs.
+If `teeShouldCloseForWritingOnEOF` is `true`, the `fileHandleForWriting` will be closed once the it sends an EOF.
+These getters are called once at the beginning of `tee` and never read from again.
+
+```swift
+public typealias Teeable = TeeReadable & TeeWriteable
+```
+A simple typealias for a type which can be any argument to `tee`
+
+```swift
+extension FileHandle: Teeable
+```
+`FileHandle` is made to conform to `Teeable` in the simplest way possible: it's file handles are just itself.
+By default, `tee` will _not_ close `FileHandle`s on EOF, so you must override this property if you would like different behavior.
+This is so that it is easy to work with `FileHandle.standardInput`/`.standardOutput`/`.standardError`, which should not be closed.
+
+```swift
+extension Pipe: Teeable
+```
+`Pipe` essentially already conforms to `Teeable`.
+By default, `tee` will close `Pipe`s on EOF for writing but _not_ for reading, so you must override this property if you would like different behavior.
+This is so that it is easy to integrate `tee` into existing workflows around `Process`.
+As far as I know, there is no way to create a `Pipe` which does not own its reading handle, so you should not modify `closeFileHandleForReadingOnEOF`.
+
+```swift
+extension TeeReadable {
+    public func teeCloseForReadingOnEOF(_ shouldCloseForReadingOnEOF: Bool = true) -> TeeCloseForReadingOnEOF<Self>
+}
+```
+A convience method on `TeeReadable` to change `teeShouldCloseForReadingOnEOF`.
+Calling `t.teeCloseForReadingOnEOF(a)` for some `t: TeeReadable` and `a: Bool` returns a `TeeReadable` with a handle which is that of `t` and a `teeShouldCloseForReadingOnEOF` which is `a`.
+
+```swift
+extension TeeWriteable {
+    public func teeCloseForWritingOnEOF(_ shouldCloseForWritingOnEOF: Bool = true) -> TeeCloseForWritingOnEOF<Self> 
+}
+```
+
+A convience method on `TeeWriteable` to change `teeShouldCloseForWritingOnEOF`.
+Calling `t.teeCloseForWritingOnEOF(a)` for some `t: TeeWriteable` and `a: Bool` returns a `TeeWriteable` with a handle which is that of `t` and a `teeShouldCloseForWritingOnEOF` which is `a`.
+```swift
+extension TeeReadable where Self: TeeWriteable {
+    public func teeCloseOnEOF(forReading shouldCloseForReadingOnEOF: Bool = false, forWriting shouldCloseForWritingOnEOF: Bool = true) -> TeeCloseOnEOF<Self>
+}
+```
+A convience method on `Teeable` to change `teeShouldCloseForReadingOnEOF` and`teeShouldCloseForWritingOnEOF` simultaneously.
+Calling `t.teeCloseForOnEOF(forReading: a, forWriting: b)` for some `t: Teeable`, `a: Bool`, and `b: Bool` returns a `Teeable` with handles which are that of `t`, a `teeShouldCloseForReadingOnEOF` which is `a`, and a `teeShouldCloseForWritingOnEOF` which is `b`.

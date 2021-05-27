@@ -2,20 +2,33 @@
     @testable import tee
 
     final class teeTests: XCTestCase {
-        func testFileHandleForReading() {
-            let pipe = Pipe()
-            XCTAssertEqual(fileHandleForReading(pipe), pipe.fileHandleForReading)
-            XCTAssertEqual(fileHandleForReading(FileHandle.standardInput), FileHandle.standardInput)
-            XCTAssertEqual(fileHandleForReading(FileHandle.nullDevice), FileHandle.nullDevice)
-            XCTAssertNil(fileHandleForReading("test"))
+        func testFileHandle() {
+            XCTAssertEqual(FileHandle.standardInput.fileHandleForReading, FileHandle.standardInput)
+            XCTAssertEqual(FileHandle.nullDevice.fileHandleForReading, FileHandle.nullDevice)
+            
+            XCTAssertEqual(FileHandle.standardOutput.fileHandleForWriting, FileHandle.standardOutput)
+            XCTAssertEqual(FileHandle.nullDevice.fileHandleForWriting, FileHandle.nullDevice)
         }
         
-        func testFileHandleForWriting() {
+        func testShouldOnEOF() {
+            XCTAssertEqual(FileHandle.standardInput.teeShouldCloseForReadingOnEOF, false)
+            XCTAssertEqual(FileHandle.standardOutput.teeShouldCloseForWritingOnEOF, false)
+            
             let pipe = Pipe()
-            XCTAssertEqual(fileHandleForWriting(pipe), pipe.fileHandleForWriting)
-            XCTAssertEqual(fileHandleForWriting(FileHandle.standardOutput), FileHandle.standardOutput)
-            XCTAssertEqual(fileHandleForWriting(FileHandle.nullDevice), FileHandle.nullDevice)
-            XCTAssertNil(fileHandleForWriting("test"))
+            XCTAssertEqual(pipe.teeShouldCloseForReadingOnEOF, false)
+            XCTAssertEqual(pipe.teeShouldCloseForWritingOnEOF, true)
+            
+            XCTAssertEqual(FileHandle.standardInput.teeCloseForReadingOnEOF().teeShouldCloseForReadingOnEOF, true)
+            XCTAssertEqual(FileHandle.standardOutput.teeCloseForWritingOnEOF().teeShouldCloseForWritingOnEOF, true)
+            
+            XCTAssertEqual(pipe.teeCloseForReadingOnEOF().teeCloseForReadingOnEOF(false).teeShouldCloseForReadingOnEOF, false)
+            XCTAssertEqual(pipe.teeCloseForWritingOnEOF().teeCloseForWritingOnEOF(false).teeShouldCloseForWritingOnEOF, false)
+            
+            XCTAssertEqual(pipe.teeCloseOnEOF().teeShouldCloseForReadingOnEOF, false)
+            XCTAssertEqual(pipe.teeCloseOnEOF().teeShouldCloseForWritingOnEOF, true)
+            
+            XCTAssertEqual(pipe.teeCloseOnEOF(forReading: true, forWriting: false).teeShouldCloseForReadingOnEOF, true)
+            XCTAssertEqual(pipe.teeCloseOnEOF(forReading: true, forWriting: false).teeShouldCloseForWritingOnEOF, false)
         }
         
         func testTee() {
@@ -115,5 +128,28 @@
             
             XCTAssertEqual(String(data: catOutput1.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8), message)
             XCTAssertEqual(String(data: catOutput2.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8), message)
+        }
+        
+        func testTeeWrappers() throws {
+            let input = Pipe()
+            let output1 = Pipe()
+            let output2 = Pipe()
+            
+            let inputHandle = input.fileHandleForWriting
+            let outputHandle1 = output1.fileHandleForReading
+            let outputHandle2 = output2.fileHandleForReading
+            
+            tee(from: input, into: output1.teeCloseForWritingOnEOF(false), output2.teeCloseOnEOF(forWriting: false))
+                        
+            let message = ";isdhfpihveans;aoudvhPSDJc'pifjqevvasduvhzs sDVOsvODhwb;wuihvgiuesahrfgvs"
+            let data = message.data(using: .utf8)!
+            inputHandle.write(data)
+            
+            XCTAssertEqual(String(data: outputHandle1.readData(ofLength: data.count), encoding: .utf8), message)
+            XCTAssertEqual(String(data: outputHandle2.readData(ofLength: data.count), encoding: .utf8), message)
+            
+            inputHandle.closeFile()
+            outputHandle1.closeFile()
+            outputHandle2.closeFile()
         }
     }
