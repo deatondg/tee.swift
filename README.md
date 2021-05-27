@@ -131,6 +131,7 @@ inputHandle.closeFile()
 assert(String(data: catOutput1.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) == message)
 assert(String(data: catOutput2.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) == message)
 ```
+You may also wish to look at the tests.
 
 # Documentation
 
